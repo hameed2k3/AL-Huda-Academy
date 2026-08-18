@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fcfbf7;
+  --foreground: #1b1b1b;
+  --surface: #ffffff;
+  --surface-muted: #f6f5f2;
+  --surface-strong: #f0ece6;
+  --primary: #0f5132;
+  --primary-strong: #0a3f27;
+  --primary-soft: #dceee4;
+  --secondary: #1b5e20;
+  --accent: #c9a227;
+  --border: #e5ddd1;
+  --muted: #667085;
+  --success: #2f6b43;
+  --danger: #8a2c2c;
+  --shadow-soft: 0 14px 40px -24px rgba(15, 81, 50, 0.35);
+  --shadow-card: 0 16px 50px -28px rgba(17, 24, 39, 0.22);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-strong: var(--surface-strong);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-cormorant);
+  --font-arabic: var(--font-naskh);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+}
+
+html.intro-lock,
+html.intro-lock body {
+  overflow: hidden;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(15, 81, 50, 0.14);
+}
+
+.pattern-grid {
+  background-image:
+    linear-gradient(to right, rgba(201, 162, 39, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(201, 162, 39, 0.06) 1px, transparent 1px);
+  background-size: 52px 52px;
+}
+
+.pattern-stars {
+  background-image:
+    radial-gradient(circle at center, rgba(15, 81, 50, 0.055) 0.8px, transparent 0.8px);
+  background-size: 28px 28px;
+}
+
+.islamic-glow {
+  background:
+    radial-gradient(circle at top, rgba(201, 162, 39, 0.14), transparent 32%),
+    radial-gradient(circle at right, rgba(15, 81, 50, 0.09), transparent 35%);
+}
+
+.panel-shadow {
+  box-shadow: var(--shadow-soft);
+}
+
+.card-shadow {
+  box-shadow: var(--shadow-card);
+}
+
+.gold-divider {
+  background: linear-gradient(90deg, transparent, rgba(201, 162, 39, 0.85), transparent);
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.container-shell {
+  width: min(1200px, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+@media (min-width: 768px) {
+  .container-shell {
+    width: min(1200px, calc(100% - 3rem));
+  }
+}
+
+.certificate-paper {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(252, 251, 247, 0.98)),
+    radial-gradient(circle at center, rgba(201, 162, 39, 0.05), transparent 70%);
+}
+
+.certificate-pattern {
+  background-image:
+    radial-gradient(circle at center, rgba(15, 81, 50, 0.04) 0.9px, transparent 0.9px);
+  background-size: 34px 34px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

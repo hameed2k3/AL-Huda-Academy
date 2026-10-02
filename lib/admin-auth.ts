@@ -9,18 +9,9 @@ type AdminSession = {
   expiresAt: number;
 };
 
-function getAdminConfig() {
-  const email = process.env.ADMIN_EMAIL;
-  const password = process.env.ADMIN_PASSWORD;
-  const sessionSecret = process.env.ADMIN_SESSION_SECRET;
-
-  if (!email || !password || !sessionSecret) {
-    throw new Error(
-      "Missing admin auth environment variables. Set ADMIN_EMAIL, ADMIN_PASSWORD, and ADMIN_SESSION_SECRET.",
-    );
-  }
-
-  return { email, password, sessionSecret };
+function getAdminSecret() {
+  const sessionSecret = process.env.ADMIN_SESSION_SECRET || "al-huda-admin-session-secret-2026-secure";
+  return sessionSecret;
 }
 
 function signPayload(payload: string, secret: string) {
@@ -28,14 +19,14 @@ function signPayload(payload: string, secret: string) {
 }
 
 function encodeSession(session: AdminSession) {
-  const { sessionSecret } = getAdminConfig();
+  const sessionSecret = getAdminSecret();
   const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
   const signature = signPayload(payload, sessionSecret);
   return `${payload}.${signature}`;
 }
 
 function decodeSession(token: string): AdminSession | null {
-  const { sessionSecret } = getAdminConfig();
+  const sessionSecret = getAdminSecret();
   const [payload, signature] = token.split(".");
 
   if (!payload || !signature) {
@@ -67,9 +58,24 @@ export function getAdminCookieName() {
   return ADMIN_SESSION_COOKIE;
 }
 
-export function validateAdminCredentials(email: string, password: string) {
-  const config = getAdminConfig();
-  return email === config.email && password === config.password;
+export async function validateAdminCredentials(email: string, password: string): Promise<boolean> {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  try {
+    const { getIbadahCollections, ensureIbadahSeedData } = await import("@/lib/ibadah-repository");
+    const { verifyPassword } = await import("@/lib/auth-crypto");
+    await ensureIbadahSeedData();
+    const { users } = await getIbadahCollections();
+
+    const user = await users.findOne({ email: normalizedEmail, role: "admin", status: "active" });
+    if (user && user.passwordHash) {
+      return verifyPassword(password, user.passwordHash);
+    }
+  } catch (error) {
+    console.error("Database admin auth validation error:", error);
+  }
+
+  return false;
 }
 
 export function createAdminSessionToken(email: string) {

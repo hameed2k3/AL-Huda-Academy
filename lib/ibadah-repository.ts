@@ -182,7 +182,25 @@ export async function ensureIbadahSeedData() {
     await dhikrs.insertMany(defaultDhikrs);
   }
 
-  // 4. Ensure Student User Accounts exist for seeded students
+  // 4. Ensure Admin User exists in DB if environment variables provided
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const adminPass = process.env.ADMIN_PASSWORD;
+
+  if (adminEmail && adminPass) {
+    const existingAdmin = await users.findOne({ email: adminEmail, role: "admin" });
+    if (!existingAdmin) {
+      await users.insertOne({
+        email: adminEmail,
+        passwordHash: hashPassword(adminPass),
+        role: "admin",
+        studentId: null,
+        status: "active",
+        createdAt: todayDate(),
+      });
+    }
+  }
+
+  // 5. Ensure Student User Accounts exist for seeded students
   const studentDocs = await students.find().toArray();
   const defaultPasswordHash = hashPassword("student123");
 

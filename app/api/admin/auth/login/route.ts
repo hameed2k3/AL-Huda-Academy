@@ -12,7 +12,8 @@ export async function POST(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const next = searchParams.get("next") || "/admin/dashboard";
 
-  if (!validateAdminCredentials(email, password)) {
+  const isValid = await validateAdminCredentials(email, password);
+  if (!isValid) {
     return NextResponse.redirect(
       `${origin}/admin/login?error=invalid&next=${encodeURIComponent(next)}`,
     );

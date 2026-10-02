@@ -19,7 +19,7 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function toAdminCourse(document: CourseDocument): AdminCourse {
+export function toAdminCourse(document: CourseDocument): AdminCourse {
   return {
     id: document._id!.toString(),
     title: document.title,
@@ -30,7 +30,7 @@ function toAdminCourse(document: CourseDocument): AdminCourse {
   };
 }
 
-function toAdminStudent(document: StudentDocument): AdminStudent {
+export function toAdminStudent(document: StudentDocument): AdminStudent {
   return {
     id: document._id!.toString(),
     fullName: document.fullName,
@@ -46,7 +46,7 @@ function toAdminStudent(document: StudentDocument): AdminStudent {
   };
 }
 
-function toAdminCertificate(document: CertificateDocument): AdminCertificate {
+export function toAdminCertificate(document: CertificateDocument): AdminCertificate {
   return {
     id: document._id!.toString(),
     certificateNumber: document.certificateNumber,
@@ -77,123 +77,136 @@ function createCertificateNumber(sequence: number) {
   return `AHQA-${year}-${String(sequence).padStart(4, "0")}`;
 }
 
+let hasEnsuredAdminSeed = false;
+let adminSeedPromise: Promise<void> | null = null;
+
 export async function ensureSeedData() {
-  const { courses, students, certificates } = await getCollections();
+  if (hasEnsuredAdminSeed) return;
+  if (!adminSeedPromise) {
+    adminSeedPromise = (async () => {
+      const { courses, students, certificates } = await getCollections();
 
-  const courseCount = await courses.countDocuments();
+  let courseDocs = await courses.find().toArray();
 
-  if (courseCount > 0) {
-    return;
+  if (courseDocs.length === 0) {
+    const seededCourses = courseCatalog.map((course) => ({
+      title: course.title,
+      duration: course.duration,
+      description: course.description,
+      certificateAvailable: course.certificateAvailable,
+      createdAt: "2026-07-18",
+    }));
+
+    await courses.insertMany(seededCourses as Omit<CourseDocument, "_id">[]);
+    courseDocs = await courses.find().toArray();
   }
 
-  const seededCourses = courseCatalog.map((course) => ({
-    title: course.title,
-    duration: course.duration,
-    description: course.description,
-    certificateAvailable: course.certificateAvailable,
-    createdAt: "2026-07-18",
-  }));
+  const courseIds = courseDocs.map((c) => c._id!.toString());
 
-  const insertedCourses = await courses.insertMany(seededCourses as Omit<CourseDocument, "_id">[]);
-  const courseEntries = Object.entries(insertedCourses.insertedIds);
-  const courseIds = courseEntries.map(([, value]) => value.toString());
+  const studentCount = await students.countDocuments();
+  if (studentCount === 0) {
+    const seededStudents: Omit<StudentDocument, "_id">[] = [
+      {
+        fullName: "Amina Rahman",
+        guardianName: "Abdul Rahman",
+        email: "amina@example.com",
+        phone: "+91 9000000001",
+        courseId: courseIds[0] ?? null,
+        status: "completed",
+        createdAt: "2026-04-01",
+        completedAt: "2026-04-08",
+        certificateId: null,
+        instructorName: "Ustadha Maryam Siddiqui",
+      },
+      {
+        fullName: "Yusuf Kareem",
+        guardianName: "Kareem Ahmed",
+        email: "yusuf@example.com",
+        phone: "+91 9000000002",
+        courseId: courseIds[1] ?? null,
+        status: "completed",
+        createdAt: "2026-05-01",
+        completedAt: "2026-05-18",
+        certificateId: null,
+        instructorName: "Qari Abdul Basit",
+      },
+      {
+        fullName: "Safiya Ahmed",
+        guardianName: "Imran Ahmed",
+        email: "safiya@example.com",
+        phone: "+91 9000000003",
+        courseId: courseIds[2] ?? null,
+        status: "completed",
+        createdAt: "2026-05-25",
+        completedAt: "2026-06-09",
+        certificateId: null,
+        instructorName: "Ustadha Hiba Noor",
+      },
+      {
+        fullName: "Maryam Ali",
+        guardianName: "Sajid Ali",
+        email: "maryam@example.com",
+        phone: "+91 9000000004",
+        courseId: courseIds[3] ?? null,
+        status: "active",
+        createdAt: "2026-07-10",
+        completedAt: null,
+        certificateId: null,
+        instructorName: "Ustadha Hiba Noor",
+      },
+    ];
 
-  const seededStudents: Omit<StudentDocument, "_id">[] = [
-    {
-      fullName: "Amina Rahman",
-      guardianName: "Abdul Rahman",
-      email: "amina@example.com",
-      phone: "+91 9000000001",
-      courseId: courseIds[0] ?? null,
-      status: "completed",
-      createdAt: "2026-04-01",
-      completedAt: "2026-04-08",
-      certificateId: null,
-      instructorName: "Ustadha Maryam Siddiqui",
-    },
-    {
-      fullName: "Yusuf Kareem",
-      guardianName: "Kareem Ahmed",
-      email: "yusuf@example.com",
-      phone: "+91 9000000002",
-      courseId: courseIds[1] ?? null,
-      status: "completed",
-      createdAt: "2026-05-01",
-      completedAt: "2026-05-18",
-      certificateId: null,
-      instructorName: "Qari Abdul Basit",
-    },
-    {
-      fullName: "Safiya Ahmed",
-      guardianName: "Imran Ahmed",
-      email: "safiya@example.com",
-      phone: "+91 9000000003",
-      courseId: courseIds[2] ?? null,
-      status: "completed",
-      createdAt: "2026-05-25",
-      completedAt: "2026-06-09",
-      certificateId: null,
-      instructorName: "Ustadha Hiba Noor",
-    },
-    {
-      fullName: "Maryam Ali",
-      guardianName: "Sajid Ali",
-      email: "maryam@example.com",
-      phone: "+91 9000000004",
-      courseId: courseIds[3] ?? null,
-      status: "active",
-      createdAt: "2026-07-10",
-      completedAt: null,
-      certificateId: null,
-      instructorName: "Ustadha Hiba Noor",
-    },
-  ];
+    const insertedStudents = await students.insertMany(seededStudents);
+    const studentIds = Object.values(insertedStudents.insertedIds).map((value) =>
+      value.toString(),
+    );
 
-  const insertedStudents = await students.insertMany(seededStudents);
-  const studentIds = Object.values(insertedStudents.insertedIds).map((value) =>
-    value.toString(),
-  );
+    const certCount = await certificates.countDocuments();
+    if (certCount === 0) {
+      const seededCertificates: Omit<CertificateDocument, "_id">[] = seededStudents
+        .map((student, index) => {
+          if (student.status !== "completed" || !student.courseId) {
+            return null;
+          }
 
-  const seededCertificates: Omit<CertificateDocument, "_id">[] = seededStudents
-    .map((student, index) => {
-      if (student.status !== "completed" || !student.courseId) {
-        return null;
+          const course = courseDocs.find((c) => c._id!.toString() === student.courseId);
+
+          return {
+            certificateNumber: createCertificateNumber(index + 1),
+            studentId: studentIds[index] ?? "",
+            studentName: student.fullName,
+            courseId: student.courseId,
+            courseTitle: course?.title || "Quran Recitation & Tajweed Fundamentals",
+            issueDate: student.completedAt ?? today(),
+            completionDate: student.completedAt ?? today(),
+            instructorName: student.instructorName,
+            grade: index === 1 ? "Distinction" : "Excellent",
+            generatedAt: student.completedAt ?? today(),
+          };
+        })
+        .filter((certificate): certificate is Omit<CertificateDocument, "_id"> => Boolean(certificate));
+
+      if (seededCertificates.length > 0) {
+        const insertedCertificates = await certificates.insertMany(seededCertificates);
+        const certificateIds = Object.values(insertedCertificates.insertedIds).map((value) =>
+          value.toString(),
+        );
+
+        await Promise.all(
+          certificateIds.map((certificateId, index) =>
+            students.updateOne(
+              { _id: new ObjectId(studentIds[index] ?? "") },
+              { $set: { certificateId } },
+            ),
+          ),
+        );
       }
-
-      const course = seededCourses.find((_, courseIndex) => courseIds[courseIndex] === student.courseId);
-
-      if (!course) {
-        return null;
-      }
-
-      return {
-        certificateNumber: createCertificateNumber(index + 1),
-        studentId: studentIds[index] ?? "",
-        studentName: student.fullName,
-        courseId: student.courseId,
-        courseTitle: course.title,
-        issueDate: student.completedAt ?? today(),
-        completionDate: student.completedAt ?? today(),
-        instructorName: student.instructorName,
-        grade: index === 1 ? "Distinction" : "Excellent",
-        generatedAt: student.completedAt ?? today(),
-      };
-    })
-    .filter((certificate): certificate is Omit<CertificateDocument, "_id"> => Boolean(certificate));
-
-  const insertedCertificates = await certificates.insertMany(seededCertificates);
-  const certificateIds = Object.values(insertedCertificates.insertedIds).map((value) =>
-    value.toString(),
-  );
-
-  await Promise.all(
-    certificateIds.map((certificateId, index) =>
-      students.updateOne(
-        { _id: new ObjectId(studentIds[index] ?? "") },
-        { $set: { certificateId } },
-      ),
-    ),
-  );
+    }
+  }
+      hasEnsuredAdminSeed = true;
+    })();
+  }
+  return adminSeedPromise;
 }
 
 export async function listCourses() {

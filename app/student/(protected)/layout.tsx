@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { requireStudentSession } from "@/lib/student-auth";
 import { StudentBottomNav } from "@/components/student-bottom-nav";
+import { PushNotificationListener } from "@/components/push-notification-listener";
 
 export default async function StudentLayout({
   children,
@@ -12,6 +13,7 @@ export default async function StudentLayout({
 
   return (
     <div className="min-h-screen bg-surface-muted pb-24 md:pb-12">
+      <PushNotificationListener />
       <div className="container-shell py-6 sm:py-8">
         {/* Top Header Card */}
         <header className="mb-4 sm:mb-6 flex items-center justify-between gap-3 rounded-2xl sm:rounded-3xl border border-border bg-surface px-4 py-3 sm:px-6 sm:py-4 panel-shadow">

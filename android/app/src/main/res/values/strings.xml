@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Al-Huda Quran Academy</string>
+    <string name="title_activity_main">Al-Huda Quran Academy</string>
+    <string name="package_name">com.alhuda.academy</string>
+    <string name="custom_url_scheme">com.alhuda.academy</string>
+</resources>

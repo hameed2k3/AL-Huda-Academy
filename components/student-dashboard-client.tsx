@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { StudentDashboardData } from "@/lib/student-dashboard-data";
 import type { DayCompletionSummary } from "@/lib/ibadah-types";
+import { saveOfflineIbadahCache, flushOfflineSyncQueue } from "@/lib/offline-ibadah-cache";
+import { PrayerAlarmsCard } from "@/components/prayer-alarms-card";
 
 type DashboardClientProps = {
   initialData: StudentDashboardData;
@@ -22,6 +24,7 @@ export function StudentDashboardClient({ initialData }: DashboardClientProps) {
   );
   const [activeFilter, setActiveFilter] = useState<"all" | "prayers" | "duas" | "dhikrs">("all");
   const [toggling, setToggling] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
 
   // Local Tasbih count state for interactive Dhikr counting
   const [dhikrCounts, setDhikrCounts] = useState<Record<string, number>>(() => {
@@ -35,6 +38,55 @@ export function StudentDashboardClient({ initialData }: DashboardClientProps) {
 
   const { student, course, certificate, streak, prayers, assignedDuas, assignedDhikrs, todayDate } =
     initialData;
+
+  useEffect(() => {
+    // Save to local cache for offline usage
+    saveOfflineIbadahCache({
+      studentId: student.id,
+      studentName: student.fullName,
+      todayDate,
+      prayers,
+      assignedDuas,
+      assignedDhikrs,
+      summary,
+      cachedAt: Date.now(),
+    });
+
+    function handleOnline() {
+      setIsOnline(true);
+      void flushOfflineSyncQueue();
+    }
+    function handleOffline() {
+      setIsOnline(false);
+    }
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    if (typeof navigator !== "undefined") {
+      setIsOnline(navigator.onLine);
+    }
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [student, todayDate, prayers, assignedDuas, assignedDhikrs, summary]);
+
+  async function triggerHaptics(reachedTarget: boolean) {
+    try {
+      const { Capacitor } = await import("@capacitor/core");
+      if (Capacitor.isNativePlatform()) {
+        const { Haptics, ImpactStyle, NotificationType } = await import("@capacitor/haptics");
+        if (reachedTarget) {
+          await Haptics.notification({ type: NotificationType.Success });
+        } else {
+          await Haptics.impact({ style: ImpactStyle.Light });
+        }
+      }
+    } catch {
+      // Haptics not available in current environment
+    }
+  }
 
   async function handleToggle(type: "prayer" | "dua" | "dhikr", itemId: string) {
     const key = `${type}-${itemId}`;
@@ -82,8 +134,12 @@ export function StudentDashboardClient({ initialData }: DashboardClientProps) {
     const next = current + 1;
     setDhikrCounts((prev) => ({ ...prev, [dhikrId]: next }));
 
+    // Trigger tactile haptic vibration
+    const isTarget = next >= targetCount;
+    void triggerHaptics(isTarget);
+
     // Auto complete when target is reached
-    if (next >= targetCount && !completedDhikrs.includes(dhikrId)) {
+    if (isTarget && !completedDhikrs.includes(dhikrId)) {
       handleToggle("dhikr", dhikrId);
     }
   }
@@ -94,6 +150,7 @@ export function StudentDashboardClient({ initialData }: DashboardClientProps) {
       handleToggle("dhikr", dhikrId);
     }
   }
+
 
   const formattedToday = new Date().toLocaleDateString("en-US", {
     weekday: "short",
@@ -111,6 +168,19 @@ export function StudentDashboardClient({ initialData }: DashboardClientProps) {
 
   return (
     <div className="space-y-4 sm:space-y-6 pb-6">
+      {/* Offline Status Alert Banner */}
+      {!isOnline && (
+        <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-3.5 flex items-center justify-between gap-3 text-xs font-semibold text-amber-800 dark:text-amber-300 animate-pulse">
+          <div className="flex items-center gap-2">
+            <span>📡</span>
+            <span>You are currently offline. Your daily Duas, Dhikrs, and Prayers are available from offline cache.</span>
+          </div>
+          <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-[10px] uppercase font-bold">
+            Offline Mode
+          </span>
+        </div>
+      )}
+
       {/* 1. Mobile-First Hero Banner with Circular Progress Ring */}
       <section className="relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-primary-strong via-primary to-[#0e482f] p-5 sm:p-7 text-white shadow-lg">
         <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-5">
@@ -120,6 +190,7 @@ export function StudentDashboardClient({ initialData }: DashboardClientProps) {
               <span className="opacity-40">•</span>
               <span className="text-accent font-bold">🔥 {streak} Day Streak</span>
             </div>
+
             <h2 className="mt-2 text-xl sm:text-2xl font-bold tracking-tight">
               Assalamu Alaikum, {student.fullName.split(" ")[0]} 🌿
             </h2>
@@ -484,7 +555,10 @@ export function StudentDashboardClient({ initialData }: DashboardClientProps) {
         </section>
       )}
 
-      {/* 6. Quick Course & Certificate Link */}
+      {/* 6. On-Device Daily Prayer & Adhkar Alarms Card */}
+      <PrayerAlarmsCard />
+
+      {/* 7. Quick Course & Certificate Link */}
       {course && (
         <section className="rounded-3xl border border-border bg-surface p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -512,6 +586,7 @@ export function StudentDashboardClient({ initialData }: DashboardClientProps) {
           </div>
         </section>
       )}
+
     </div>
   );
 }

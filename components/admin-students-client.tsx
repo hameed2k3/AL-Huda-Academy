@@ -12,6 +12,7 @@ type StudentFormState = {
   courseId: string;
   status: "active" | "completed";
   instructorName: string;
+  password?: string;
 };
 
 const emptyForm: StudentFormState = {
@@ -22,7 +23,17 @@ const emptyForm: StudentFormState = {
   courseId: "",
   status: "active" as const,
   instructorName: "Ustadha Maryam Siddiqui",
+  password: "",
 };
+
+function generateRandomPassword() {
+  const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$";
+  let pass = "";
+  for (let i = 0; i < 8; i++) {
+    pass += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return pass;
+}
 
 export function AdminStudentsClient() {
   const {
@@ -41,8 +52,15 @@ export function AdminStudentsClient() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "completed">("all");
+
+  // Reset Password Modal State
+  const [resetModalStudent, setResetModalStudent] = useState<{ id: string; fullName: string; email: string } | null>(null);
+  const [newAdminPassword, setNewAdminPassword] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetFeedback, setResetFeedback] = useState<{ type: "success" | "error"; message: string; copied?: boolean } | null>(null);
 
   const filteredStudents = useMemo(() => {
     return students
@@ -66,6 +84,7 @@ export function AdminStudentsClient() {
     setForm(emptyForm);
     setEditingId(null);
     setShowForm(false);
+    setShowPassword(false);
   }
 
   async function submit() {
@@ -77,6 +96,7 @@ export function AdminStudentsClient() {
       courseId: form.courseId || null,
       status: form.status,
       instructorName: form.instructorName,
+      ...(form.password && form.password.trim() ? { password: form.password.trim() } : {}),
     };
 
     if (editingId) {
@@ -86,6 +106,49 @@ export function AdminStudentsClient() {
     }
 
     resetForm();
+  }
+
+  async function handleAdminResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resetModalStudent) return;
+
+    if (newAdminPassword.length < 6) {
+      setResetFeedback({ type: "error", message: "Password must be at least 6 characters." });
+      return;
+    }
+
+    setResetLoading(true);
+    setResetFeedback(null);
+
+    try {
+      const res = await fetch(`/api/admin/students/${resetModalStudent.id}/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: newAdminPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || "Failed to reset password.");
+
+      setResetFeedback({
+        type: "success",
+        message: `Password reset successfully for ${resetModalStudent.fullName}!`,
+      });
+    } catch (err) {
+      setResetFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Reset failed.",
+      });
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
+  function copyCredentials(email: string, pass: string) {
+    const text = `Al-Huda Academy Student Login\nPortal: /student/login\nEmail: ${email}\nPassword: ${pass}`;
+    navigator.clipboard.writeText(text);
+    if (resetFeedback) {
+      setResetFeedback({ ...resetFeedback, copied: true });
+    }
   }
 
   return (
@@ -104,7 +167,7 @@ export function AdminStudentsClient() {
               Students ({students.length})
             </h2>
             <p className="text-xs sm:text-sm text-muted">
-              Manage enrollments, assign Ibadah curriculum, and issue certificates.
+              Manage enrollments, assign Ibadah curriculum, and configure student login passwords.
             </p>
           </div>
 
@@ -189,7 +252,7 @@ export function AdminStudentsClient() {
         <section className="rounded-3xl border border-primary/20 bg-emerald-50/20 p-4 sm:p-6 panel-shadow">
           <div className="flex items-center justify-between pb-3 border-b border-border">
             <h3 className="font-bold text-base sm:text-lg text-primary">
-              {editingId ? "Edit Student Details" : "Enroll New Student"}
+              {editingId ? "Edit Student Details" : "Enroll New Student & Create Account"}
             </h3>
             <button
               type="button"
@@ -248,6 +311,52 @@ export function AdminStudentsClient() {
               placeholder="Ustadha Maryam Siddiqui"
               onChange={(value) => setForm((c) => ({ ...c, instructorName: value }))}
             />
+
+            {/* Password Input for Student */}
+            <div className="sm:col-span-2 rounded-2xl border border-primary/20 bg-surface p-4 mt-1">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-primary">
+                  {editingId ? "Update Student Password (Optional)" : "Initial Student Password"}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pass = generateRandomPassword();
+                    setForm((c) => ({ ...c, password: pass }));
+                    setShowPassword(true);
+                  }}
+                  className="text-xs font-bold text-accent hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  🎲 Generate Random Password
+                </button>
+              </div>
+
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={form.password || ""}
+                  onChange={(e) => setForm((c) => ({ ...c, password: e.target.value }))}
+                  placeholder={
+                    editingId
+                      ? "Leave blank to keep existing password..."
+                      : "Enter password (or leave blank to use default 'student123')"
+                  }
+                  className="w-full rounded-xl border border-border bg-surface-muted px-4 py-2 text-xs sm:text-sm outline-none focus:border-primary pr-20"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-2 text-xs font-semibold text-muted hover:text-primary"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+              <p className="mt-1 text-[11px] text-muted">
+                {editingId
+                  ? "Tip: Only fill this if you wish to reset or change this student's login password."
+                  : "If left blank, initial password defaults to 'student123'. You can copy and share it with the student."}
+              </p>
+            </div>
           </div>
 
           <div className="mt-5 flex items-center gap-2">
@@ -341,11 +450,23 @@ export function AdminStudentsClient() {
 
               {/* Right Action Buttons */}
               <div className="flex items-center gap-2 flex-wrap pt-2 lg:pt-0 border-t lg:border-t-0 border-border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResetModalStudent({ id: student.id, fullName: student.fullName, email: student.email });
+                    setNewAdminPassword(generateRandomPassword());
+                    setResetFeedback(null);
+                  }}
+                  className="rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-bold text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 transition cursor-pointer inline-flex items-center gap-1"
+                >
+                  🔑 Reset Password
+                </button>
+
                 <Link
                   href={`/admin/students/${student.id}`}
                   className="rounded-full bg-primary/10 border border-primary/20 px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs font-bold text-primary hover:bg-primary hover:text-white transition cursor-pointer"
                 >
-                  ⚡ Assign Ibadah & Stats →
+                  ⚡ Ibadah & Stats →
                 </Link>
 
                 <button
@@ -360,6 +481,7 @@ export function AdminStudentsClient() {
                       courseId: student.courseId ?? "",
                       status: student.status,
                       instructorName: student.instructorName,
+                      password: "",
                     });
                     setShowForm(true);
                   }}
@@ -402,6 +524,108 @@ export function AdminStudentsClient() {
           );
         })}
       </section>
+
+      {/* 4. Admin Quick Reset Password Modal */}
+      {resetModalStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-md rounded-3xl border border-border bg-surface p-6 sm:p-8 panel-shadow relative">
+            <button
+              type="button"
+              onClick={() => {
+                setResetModalStudent(null);
+                setResetFeedback(null);
+              }}
+              className="absolute right-4 top-4 h-8 w-8 rounded-full bg-surface-muted border border-border flex items-center justify-center text-xs text-muted hover:text-foreground transition cursor-pointer"
+            >
+              ✕
+            </button>
+
+            <div className="mb-5">
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-800 dark:text-amber-400 mb-2">
+                <span>🔑 Admin Credential Manager</span>
+              </div>
+              <h3 className="font-display text-xl font-bold text-primary">
+                Reset Password
+              </h3>
+              <p className="text-xs text-muted mt-1">
+                Student: <strong className="text-foreground">{resetModalStudent.fullName}</strong> ({resetModalStudent.email})
+              </p>
+            </div>
+
+            {resetFeedback && (
+              <div
+                className={`mb-4 rounded-2xl p-4 text-xs font-semibold border ${
+                  resetFeedback.type === "success"
+                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400"
+                    : "bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400"
+                }`}
+              >
+                <p>{resetFeedback.message}</p>
+                {resetFeedback.type === "success" && (
+                  <div className="mt-3 pt-3 border-t border-emerald-500/20 flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-muted">
+                      Password: <code className="font-bold text-foreground">{newAdminPassword}</code>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copyCredentials(resetModalStudent.email, newAdminPassword)}
+                      className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-emerald-700 transition cursor-pointer"
+                    >
+                      {resetFeedback.copied ? "✓ Copied!" : "📋 Copy Credentials"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <form onSubmit={handleAdminResetPassword} className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-primary">
+                    New Password *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setNewAdminPassword(generateRandomPassword())}
+                    className="text-xs font-bold text-accent hover:underline cursor-pointer"
+                  >
+                    🎲 Re-generate
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  minLength={6}
+                  value={newAdminPassword}
+                  onChange={(e) => setNewAdminPassword(e.target.value)}
+                  placeholder="Enter new password (min 6 chars)"
+                  className="w-full rounded-2xl border border-border bg-surface-muted px-4 py-2.5 text-xs sm:text-sm text-foreground font-mono focus:border-primary focus:bg-surface focus:outline-none transition"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="flex-1 rounded-full bg-primary py-2.5 text-xs sm:text-sm font-bold text-white shadow-md hover:bg-primary-strong transition disabled:opacity-50 cursor-pointer"
+                >
+                  {resetLoading ? "Updating..." : "Save & Apply New Password"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResetModalStudent(null);
+                    setResetFeedback(null);
+                  }}
+                  className="rounded-full border border-border bg-surface px-4 py-2.5 text-xs sm:text-sm font-medium text-muted hover:text-foreground transition cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

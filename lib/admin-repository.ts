@@ -11,9 +11,20 @@ import type {
   UpdateStudentInput,
 } from "@/lib/admin-types";
 
+import { hashPassword } from "@/lib/auth-crypto";
+
 type CourseDocument = Omit<AdminCourse, "id"> & { _id?: ObjectId };
 type StudentDocument = Omit<AdminStudent, "id"> & { _id?: ObjectId };
 type CertificateDocument = Omit<AdminCertificate, "id"> & { _id?: ObjectId };
+type UserDocument = {
+  _id?: ObjectId;
+  email: string;
+  passwordHash: string;
+  role: "admin" | "student";
+  studentId: string | null;
+  status: "active" | "inactive";
+  createdAt: string;
+};
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -69,8 +80,10 @@ async function getCollections() {
     courses: db.collection<CourseDocument>("courses"),
     students: db.collection<StudentDocument>("students"),
     certificates: db.collection<CertificateDocument>("certificates"),
+    users: db.collection<UserDocument>("users"),
   };
 }
+
 
 function createCertificateNumber(sequence: number) {
   const year = new Date().getFullYear();
@@ -261,25 +274,96 @@ export async function listStudents() {
 
 export async function createStudent(input: CreateStudentInput) {
   await ensureSeedData();
-  const { students } = await getCollections();
+  const { students, users } = await getCollections();
+  
+  const { password, ...studentData } = input;
+  
   const result = await students.insertOne({
-    ...input,
+    ...studentData,
     createdAt: today(),
     completedAt: null,
     certificateId: null,
   } as Omit<StudentDocument, "_id">);
+  
+  const studentId = result.insertedId.toString();
+  const rawPassword = password && password.trim() ? password.trim() : "student123";
+  const passwordHash = hashPassword(rawPassword);
+  const normalizedEmail = input.email.trim().toLowerCase();
+
+  // Create or update user account
+  const existingUser = await users.findOne({ 
+    $or: [{ email: normalizedEmail }, { studentId }] 
+  });
+
+  if (existingUser) {
+    await users.updateOne(
+      { _id: existingUser._id },
+      {
+        $set: {
+          email: normalizedEmail,
+          passwordHash,
+          studentId,
+          role: "student",
+          status: "active",
+        },
+      }
+    );
+  } else {
+    await users.insertOne({
+      email: normalizedEmail,
+      passwordHash,
+      role: "student",
+      studentId,
+      status: "active",
+      createdAt: today(),
+    });
+  }
+
   const document = await students.findOne({ _id: result.insertedId });
   if (!document) throw new Error("Failed to create student.");
   return toAdminStudent(document);
 }
 
 export async function updateStudent(id: string, input: UpdateStudentInput) {
-  const { students, certificates } = await getCollections();
+  const { students, certificates, users } = await getCollections();
   const _id = new ObjectId(id);
-  await students.updateOne({ _id }, { $set: input });
+
+  const { password, ...studentData } = input;
+  
+  if (Object.keys(studentData).length > 0) {
+    await students.updateOne({ _id }, { $set: studentData });
+  }
 
   const student = await students.findOne({ _id });
   if (!student) throw new Error("Student not found.");
+
+  // Sync with users collection
+  const updateFields: Partial<UserDocument> = {};
+  if (input.email) {
+    updateFields.email = input.email.trim().toLowerCase();
+  }
+  if (password && password.trim()) {
+    updateFields.passwordHash = hashPassword(password.trim());
+  }
+
+  if (Object.keys(updateFields).length > 0) {
+    const existingUser = await users.findOne({
+      $or: [{ studentId: id }, { email: student.email.toLowerCase() }],
+    });
+
+    if (existingUser) {
+      await users.updateOne({ _id: existingUser._id }, { $set: updateFields });
+    } else {
+      await users.insertOne({
+        email: student.email.trim().toLowerCase(),
+        passwordHash: updateFields.passwordHash || hashPassword("student123"),
+        role: "student",
+        studentId: id,
+        status: "active",
+        createdAt: today(),
+      });
+    }
+  }
 
   const certificateUpdate: Partial<CertificateDocument> = {};
   if (input.fullName) certificateUpdate.studentName = input.fullName;
@@ -292,11 +376,49 @@ export async function updateStudent(id: string, input: UpdateStudentInput) {
   return toAdminStudent(student);
 }
 
+export async function resetStudentPassword(id: string, newPassword: string) {
+  const { students, users } = await getCollections();
+  const _id = new ObjectId(id);
+  const student = await students.findOne({ _id });
+  if (!student) throw new Error("Student not found.");
+
+  if (!newPassword || newPassword.trim().length < 6) {
+    throw new Error("Password must be at least 6 characters long.");
+  }
+
+  const passwordHash = hashPassword(newPassword.trim());
+  const existingUser = await users.findOne({
+    $or: [{ studentId: id }, { email: student.email.toLowerCase() }],
+  });
+
+  if (existingUser) {
+    await users.updateOne(
+      { _id: existingUser._id },
+      { $set: { passwordHash, email: student.email.toLowerCase() } }
+    );
+  } else {
+    await users.insertOne({
+      email: student.email.toLowerCase(),
+      passwordHash,
+      role: "student",
+      studentId: id,
+      status: "active",
+      createdAt: today(),
+    });
+  }
+
+  return { ok: true, email: student.email, fullName: student.fullName };
+}
+
 export async function deleteStudent(id: string) {
-  const { students, certificates } = await getCollections();
+  const { students, certificates, users } = await getCollections();
   await certificates.deleteMany({ studentId: id });
   await students.deleteOne({ _id: new ObjectId(id) });
+  await users.deleteMany({
+    $or: [{ studentId: id }],
+  });
 }
+
 
 export async function listCertificates() {
   await ensureSeedData();

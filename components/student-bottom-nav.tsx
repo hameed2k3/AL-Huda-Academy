@@ -15,8 +15,9 @@ export function StudentBottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t border-border/80 bg-surface/95 backdrop-blur-xl px-2 py-2 panel-shadow">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t border-border/80 bg-surface/95 backdrop-blur-xl px-2 pt-2 pb-safe panel-shadow">
       <div className="flex items-center justify-around">
+
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive =

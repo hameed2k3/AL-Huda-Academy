@@ -41,5 +41,8 @@ export type UpdateCourseInput = Partial<CreateCourseInput>;
 export type CreateStudentInput = Omit<
   AdminStudent,
   "id" | "createdAt" | "completedAt" | "certificateId"
->;
+> & {
+  password?: string;
+};
 export type UpdateStudentInput = Partial<CreateStudentInput>;
+
